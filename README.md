@@ -61,7 +61,7 @@ To execute the code you have to create the following hierarchy of folder:
 
     root/
       ├── data/                     # Folder where the two input files are copied.
-          ├── value.txt       
+          ├── values.txt       
           └── info.txt
       ├── logs/                     # Folder where the log files are created.
       ├── output/                   # Folder where the output files are created (containing the similarity matrices).
