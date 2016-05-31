@@ -1,3 +1,14 @@
+/*
+*
+* Program: Pearson Correlatrion Coefficient computation.
+* Author: Andrea Purgato
+* Version: integer input version.
+*
+* File: DeviceReader.cu
+* Description: this file support the program with some functions that are related to the performance of the GPU devices.
+*
+*/
+
 #pragma once
 
 #include "cuda_runtime.h"

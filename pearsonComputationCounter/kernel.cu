@@ -1,10 +1,22 @@
+/*
+*
+* Program: Pearson Correlatrion Coefficient computation.
+* Author: Andrea Purgato
+* Version: integer input version.
+*
+* File: kernel.cu
+* Description: this file is the main file of the program.
+*
+*/
+
+
 #pragma once
 
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
 #include <stdio.h>
-#include <math.h> 
+#include <math.h>
 #include <thread>
 #include <cmath>
 #include <ctime>
@@ -92,7 +104,7 @@ int main(int argc, char *argv[]) {
 
 	//std::cout << "Select time window ";
 	//std::cin >> TIME_WINDOW;
-	
+
 
 
 	TIME_WINDOW = 25;
@@ -101,7 +113,7 @@ int main(int argc, char *argv[]) {
 	/// Init the log file.
 	initLogFile("0", TIME_WINDOW);
 	std::cout << "\n";
-	
+
 
 
 	log("Time window: " + std::to_string(TIME_WINDOW));
@@ -1111,4 +1123,3 @@ void quadrantExecution(int startTime, int endTime, int threadNumber){
 
 
 }
-

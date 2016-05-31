@@ -1,10 +1,21 @@
+/*
+*
+* Program: Pearson Correlatrion Coefficient computation.
+* Author: Andrea Purgato
+* Version: counter occurences version.
+*
+* File: kernel.cu
+* Description: this file is the main file of the program.
+*
+*/
+
 #pragma once
 
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
 #include <stdio.h>
-#include <math.h> 
+#include <math.h>
 #include <thread>
 #include <cmath>
 #include <ctime>
@@ -145,7 +156,7 @@ int main(int argc, char *argv[]) {
 		std::cout << "\n";
 
 		// 3a. Compute the thread number.
-		
+
 		/// Get the number of thread of the split.
 		int threadNumber = i % concurentThreadsSupported;
 
@@ -173,7 +184,7 @@ int main(int argc, char *argv[]) {
 		}
 
 	}
-	
+
 	/*
 		End the execution of the program.
 	*/
@@ -463,7 +474,7 @@ float* splitCovarianceComputation(int startTime, int endTime, int xOffset, int y
 
 		// Thread creation and launch.
 		myThreads[d] = std::thread(covarianceComputation, d, startPixel, endPixel, startTime, endTime, covariance_local, xOffset, yOffset);
-		
+
 	}
 
 	/// Join all th thread execution.
@@ -498,7 +509,7 @@ void covarianceComputation(int device, int startPixel, int endPixel, int startTi
 	covariance_local[device] = (float*)malloc(nPixel * currentQuadrandInfo.pixelNumber * nTime * sizeof(float));
 
 	// SET DEVICE.
-	
+
 	cudaSetDevice(device);
 
 	/// Variables used to measure the execution time.
@@ -518,12 +529,12 @@ void covarianceComputation(int device, int startPixel, int endPixel, int startTi
 	cudaError_t err;
 
 	// MEMORY ALLOCATION
-		
+
 	/// Allocation of the COVARIANCE memory on GPU.
 	err = cudaMalloc((void**)&gpuCovariance, nPixel * currentQuadrandInfo.pixelNumber * nTime * sizeof(float));
 	if (err != 0)
 		log("GPU " +std::to_string(device) + " ERROR: covariance memory alocation, code " + std::to_string(err) + ", " + cudaGetErrorString(err));
-	
+
 	// COMPUTE THE DIMENSION OF THE GRID & KERNEL CALL.
 
 	/// Compute the grid dimension.
@@ -537,16 +548,16 @@ void covarianceComputation(int device, int startPixel, int endPixel, int startTi
 	grid.z = nTime;
 
 	// KERNEL CALL
-	
+
 	log("GPU " + std::to_string(device) + " Grid size: " + std::to_string(grid.x) + " x " + std::to_string(grid.y) + " x " + std::to_string(grid.z) + " Block size: " + std::to_string(block.x) + " x " + std::to_string(block.y));
 	log("GPU " + std::to_string(device) + " Kernel call, covariance computation. From pixel " + std::to_string(startPixel) + " to " + std::to_string(endPixel));
-	
+
 	cudaEventRecord(start);
 	gpuCovarianceComputation << <grid, block >> >(gpuData[device], gpuCovariance, currentQuadrandInfo.pixelNumber, currentQuadrandInfo.imageNumber, startPixel, nPixel, TIME_WINDOW, startTime, xOffset, yOffset);
 	cudaEventRecord(stop);
 
 	// RESULTS COPY
-	
+
 	/// Copy the covariance from GPU to RAM.
 	err = cudaMemcpy(covariance_local[device], gpuCovariance, nPixel * currentQuadrandInfo.pixelNumber * nTime * sizeof(float), cudaMemcpyDeviceToHost);
 	if (err != 0)
@@ -554,7 +565,7 @@ void covarianceComputation(int device, int startPixel, int endPixel, int startTi
 
 	/// Free the GPU memory
 	cudaFree(gpuCovariance);
-	
+
 	// EXECUTION TIME
 	cudaEventSynchronize(stop);
 	float milliseconds;
@@ -600,7 +611,7 @@ __global__ void gpuCovarianceComputation(int* data, float* covariance, int pixel
 
 		/// The -q- here need the relative index because the covariance has only space for the pixels on this GPU.
 		long covariance_index = (q * pixelNumber + p) + (blockIdx.z * nPixel * pixelNumber);
-		covariance[covariance_index] = ((float)product / timeWindow) - ((float)p_sum / timeWindow) * ((float)q_sum / timeWindow);			
+		covariance[covariance_index] = ((float)product / timeWindow) - ((float)p_sum / timeWindow) * ((float)q_sum / timeWindow);
 
 	}
 
@@ -623,7 +634,7 @@ float* splitCorrelationComputation(int startTime, int endTime, float* covariance
 
 	/// Allocate memory for the correlation.
 	float **correlation_local = (float**)malloc(gpuNumber * sizeof(float*));
-	
+
 	/// Therad array.
 	std::thread *myThreads = new std::thread[gpuNumber];
 
@@ -735,7 +746,7 @@ void correlationComputation(int device, int startPixel, int endPixel, int startT
 
 	log("GPU " + std::to_string(device) + " Grid size: " + std::to_string(grid.x) + " x " + std::to_string(grid.y) + " x " + std::to_string(grid.z) + " Block size: " + std::to_string(block.x) + " x " + std::to_string(block.y));
 	log("GPU " + std::to_string(device) + " Kernel call, correlation computation. From pixel " + std::to_string(startPixel) + " to " + std::to_string(endPixel));
-	
+
 	cudaEventRecord(start);
 	gpuCorrelationComputation << <grid, block >> >(gpuCovariance, gpuVariance, gpuCorrelation, currentQuadrandInfo.pixelNumber, startPixel, nPixel, startTime, xOffset, yOffset);
 	cudaEventRecord(stop);
@@ -800,7 +811,7 @@ size_t estmateMemoryUsage(int split, int timeWindow, info imagesInfo){
 		In the instant that need more memory on one GPU there are stored:
 		- Data
 		- Covariance (full matrix)
-		- Correlatrion (divided by the number of GPU) 
+		- Correlatrion (divided by the number of GPU)
 	*/
 
 	/// Compute the number of time stamps per split.
@@ -916,7 +927,7 @@ float* mergeMemory(float** local, int nTime){
 			memcpy(&full[(startPixel * currentQuadrandInfo.pixelNumber) + t * ((currentQuadrandInfo.pixelNumber * currentQuadrandInfo.pixelNumber))], &local[d][t * (nPixel * currentQuadrandInfo.pixelNumber)], nPixel * currentQuadrandInfo.pixelNumber * sizeof(float));
 
 		}
-		
+
 		/// Free the memory pointed.
 		free(local[d]);
 
@@ -1039,7 +1050,7 @@ void quadrantExecution(int startTime, int endTime, int threadNumber){
 				startWaiting = std::time(nullptr);
 
 				/// If yes, join the thtread, so wait the end of the results saving.
-				
+
 				log("Waiting thread " + std::to_string(threadNumber) + " to compute");
 				saveThreads[threadNumber].join();
 
@@ -1083,8 +1094,7 @@ void quadrantExecution(int startTime, int endTime, int threadNumber){
 
 	free(variance_local);
 
-	
+
 
 
 }
-

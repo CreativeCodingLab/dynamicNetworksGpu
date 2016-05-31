@@ -1,3 +1,15 @@
+/*
+*
+* Program: Pearson Correlatrion Coefficient computation.
+* Author: Andrea Purgato
+* Version: counter occurences version.
+*
+* File: DeviceReader.cu
+* Description: this file support the program with some functions that are related to the performance of the GPU devices.
+*
+*/
+
+
 #pragma once
 
 #include "cuda_runtime.h"
@@ -125,7 +137,7 @@ void updatePerformance(gpuPerformance* perf, float millisec, int N, int stuff){
 		perf->millisecTotCovariance = perf->millisecTotCovariance + millisec;
 		perf->bwCovariance = (N * sizeof(int) * 4 + N * sizeof(float)) / millisec / 1e6;
 
-	} 
+	}
 
 	if( stuff == 3) {
 

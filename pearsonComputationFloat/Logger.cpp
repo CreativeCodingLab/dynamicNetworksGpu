@@ -1,3 +1,14 @@
+/*
+*
+* Program: Pearson Correlatrion Coefficient computation.
+* Author: Andrea Purgato
+* Version: float input version.
+*
+* File: Logger.cu
+* Description: this file manage the logging operations of the program.
+*
+*/
+
 #pragma once
 
 #include <stdio.h>

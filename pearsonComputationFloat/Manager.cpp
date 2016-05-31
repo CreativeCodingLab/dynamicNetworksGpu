@@ -1,3 +1,14 @@
+/*
+*
+* Program: Pearson Correlatrion Coefficient computation.
+* Author: Andrea Purgato
+* Version: float input version.
+*
+* File: Manager.cu
+* Description: file with alle the functions used to communicate with the input and output files.
+*
+*/
+
 #pragma once
 
 #include "cuda_runtime.h"
@@ -51,7 +62,7 @@ info getInfo() {
 		Images info.
 	*/
 
-	/// Open the info file.	
+	/// Open the info file.
 	std::ifstream iFile(INFO_FOLDER + INFO_NAME);
 
 	/// Image Width
@@ -138,7 +149,7 @@ float* getData(info imagesInfo){
 	This function will be launched by a thread that will save the file indipendently.
 */
 void saveResults(float *saveData, int base, int nTimeStamp, info imagesInfo, int TIME_WINDOW, cpuPerformance* perf){
-	
+
 	std::time_t saveStart, saveEnd;
 	saveStart = std::time(nullptr);
 
@@ -160,20 +171,20 @@ void saveResults(float *saveData, int base, int nTimeStamp, info imagesInfo, int
 		/// Write the results.
 		std::string str = "";
 		for (int r = 0; r < imagesInfo.pixelNumber; r++){
-			
+
 			for (int c = r; c < imagesInfo.pixelNumber; c++){
 
 				int result_index = (r * imagesInfo.pixelNumber + c) + i * (imagesInfo.pixelNumber * imagesInfo.pixelNumber);
 				str.append(std::to_string(r) + "," + std::to_string(c) + "," + std::to_string(saveData[result_index]) + "\n");
-				
+
 			}
 		}
-		
+
 		oFile << str;
 
 		/// Close the file.
 		oFile.close();
-		
+
 	}
 
 	log("SAVING THREAD, end saving results from time " + std::to_string(base) + " to time " + std::to_string(base + nTimeStamp));
@@ -195,7 +206,7 @@ void saveResults(float *saveData, int base, int nTimeStamp, info imagesInfo, int
 	This function is launched as indipendent thread.
 */
 void saveQuadrantResults(float *saveData, int base, int nTimeStamp, info quadrantInfo, int TIME_WINDOW, cpuPerformance* perf, int quadrant, int xOffset, int yOffset,  int N){
-	
+
 	std::time_t saveStart, saveEnd;
 	saveStart = std::time(nullptr);
 
@@ -299,10 +310,10 @@ int getEndingTime(int device, int time, int gpuNumber){
 size_t getMinimumGpuMemory(device* gpu, int gpuNumber){
 
 	size_t free, mem;
-	
+
 	size_t min = gpu[0].globalMem / (1024 * 1024);
 	for (int i = 0; i < gpuNumber; i++) {
-		
+
 		/// Set the device.
 		cudaSetDevice(i);
 

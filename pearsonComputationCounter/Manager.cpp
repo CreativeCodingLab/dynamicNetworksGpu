@@ -1,3 +1,14 @@
+/*
+*
+* Program: Pearson Correlatrion Coefficient computation.
+* Author: Andrea Purgato
+* Version: integer input version.
+*
+* File: Manager.cu
+* Description: file with alle the functions used to communicate with the input and output files.
+*
+*/
+
 #pragma once
 
 #include "cuda_runtime.h"
@@ -14,7 +25,7 @@
 
 
 /*
-Info file variables.
+	Info file variables.
 */
 std::string INFO_NAME = "info_EVENT_1.txt";
 std::string INFO_FOLDER = "data/";
@@ -26,12 +37,12 @@ std::string DATA_NAME = "values_EVENT_1.txt";
 std::string DATA_FOLDER = "data/";
 
 /*
-Results file variables.
+	Results file variables.
 */
 std::string RES_FOLDER = "output/";
 
 /*
-ruct that contains the images info.
+	Struct that contains the images info.
 */
 struct info{
 	int pixelNumber;
@@ -39,7 +50,7 @@ struct info{
 };
 
 /*
-	function that return the images inf.
+	Function that return the images inf.
 */
 info getInfo() {
 
@@ -49,10 +60,10 @@ info getInfo() {
 	std::string delimiter = ",";
 
 	/*
-	Images info.
+		Images info.
 	*/
 
-	/// Open the info file.	
+	/// Open the info file.
 	std::ifstream iFile(INFO_FOLDER + INFO_NAME);
 
 	/// Image Width
