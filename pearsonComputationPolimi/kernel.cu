@@ -59,15 +59,10 @@ float* splitVarianceComputation(int, int);
 void varianceComputation(int, int, int, int, int, float**);
 __global__ void gpuVarianceComputation(int*, float*, int, int, int, int, int, int);
 
-// Covariance.
-float* splitCovarianceComputation(int, int, int, int);
-void covarianceComputation(int, int, int, int, int, float**, int, int);
-__global__ void gpuCovarianceComputation(int*, float*, int, int, int, int, int, int, int, int);
-
 // Correlation.
-float* splitCorrelationComputation(int, int, float*, float*, int, int);
-void correlationComputation(int, int, int, int, int, float**, float*, float*, int, int);
-__global__ void gpuCorrelationComputation(float*, float*, float*, int, int, int, int, int, int);
+float* splitCorrelationComputation(int, int, float*, int, int);
+void correlationComputation(int, int, int, int, int, float**, float*, int, int);
+__global__ void gpuCorrelationComputation(int*, float*, float*, int, int, int, int, int, int, int, int);
 
 // Auxiliary functions.
 size_t estmateMemoryUsage(int, int, info);
@@ -152,6 +147,9 @@ int main(int argc, char *argv[]) {
 	// 3. Iteraete on each split.
 
 	for (int i = 0; i < split; i++){
+
+		if (i == 1)
+			break;
 
 		std::cout << "\n";
 
@@ -447,176 +445,6 @@ __global__ void gpuVarianceComputation(int* data, float* variance, int pixelNumb
 
 }
 
-/*
-	3d. ### COVARIANCE ###
-
-	The following functions has the aim to split the computation of the covariance for timestamp zero on the GPUs.
-	The first function iterate on all the GPUs and launch a thread that will call the Kernel that compute its part of the covariance.
-
-	- splitCovarianceComputation: iterate on the devices and launch the thread.
-	- covarianceComputation: function executed by each thread that prepare the GPU memory and call the kernel function.
-	- gpuCovarianceComputation: kernel function that computet the covaraince.
-*/
-float* splitCovarianceComputation(int startTime, int endTime, int xOffset, int yOffset){
-
-	/// Allocate memory pointers for the covariance, one per GPU.
-	float **covariance_local = (float**) malloc(gpuNumber * sizeof(float*));
-
-	/// Therad array.
-	std::thread *myThreads = new std::thread[gpuNumber];
-
-	/// Loop over all the devices.
-	for (int d = 0; d < gpuNumber; d++){
-
-		/// Compute the start and end pixel number.
-		int startPixel = getStartingPixel(d, currentQuadrandInfo, gpuNumber);
-		int endPixel = getEndingPixel(d, currentQuadrandInfo, gpuNumber);
-
-		// Thread creation and launch.
-		myThreads[d] = std::thread(covarianceComputation, d, startPixel, endPixel, startTime, endTime, covariance_local, xOffset, yOffset);
-
-	}
-
-	/// Join all th thread execution.
-	for (int d = 0; d < gpuNumber; d++){
-
-		// Thread -d- join.
-		myThreads[d].join();
-
-	}
-
-	/// Delete the threads array.
-	delete [] myThreads;
-
-	/// Return the covariance computed.
-	if (gpuNumber == 1){
-		return covariance_local[0];
-	} else {
-		return mergeMemory(covariance_local, (endTime - startTime + 1));
-	}
-
-}
-
-void covarianceComputation(int device, int startPixel, int endPixel, int startTime, int endTime, float** covariance_local, int xOffset, int yOffset){
-
-	/// Compute the number of pixel to process.
-	int nPixel = endPixel - startPixel + 1;
-
-	/// Compute the number of time instant to process
-	int nTime = endTime - startTime + 1;
-
-	/// Allocate the RAM memory where save the covariance results.
-	covariance_local[device] = (float*)malloc(nPixel * currentQuadrandInfo.pixelNumber * nTime * sizeof(float));
-
-	// SET DEVICE.
-
-	cudaSetDevice(device);
-
-	/// Variables used to measure the execution time.
-	cudaEvent_t start, stop;
-	cudaEventCreate(&start);
-	cudaEventCreate(&stop);
-
-	/*
-		The computation of the covariance is done in this way:
-		- Each thread compute the covariance for a pixel pair (p and q).
-		- Pixel p is idntified by the thread number for the column.
-		- Pixel q is identified by the thread number for the row plus the starting pixel number.
-	*/
-
-	/// GPU memory pointers.
-	float* gpuCovariance = 0;
-	cudaError_t err;
-
-	// MEMORY ALLOCATION
-
-	/// Allocation of the COVARIANCE memory on GPU.
-	err = cudaMalloc((void**)&gpuCovariance, nPixel * currentQuadrandInfo.pixelNumber * nTime * sizeof(float));
-	if (err != 0)
-		log("GPU " +std::to_string(device) + " ERROR: covariance memory alocation, code " + std::to_string(err) + ", " + cudaGetErrorString(err));
-
-	// COMPUTE THE DIMENSION OF THE GRID & KERNEL CALL.
-
-	/// Compute the grid dimension.
-	dim3 grid, block;
-
-	block.x = sqrt(gpu[device].maxThreadPerBlock);
-	block.y = sqrt(gpu[device].maxThreadPerBlock);
-
-	grid.x = std::ceil((float)currentQuadrandInfo.pixelNumber / block.x);
-	grid.y = std::ceil((float)nPixel / block.y); /// The split is on the y-axis
-	grid.z = nTime;
-
-	// KERNEL CALL
-
-	log("GPU " + std::to_string(device) + " Grid size: " + std::to_string(grid.x) + " x " + std::to_string(grid.y) + " x " + std::to_string(grid.z) + " Block size: " + std::to_string(block.x) + " x " + std::to_string(block.y));
-	log("GPU " + std::to_string(device) + " Kernel call, covariance computation. From pixel " + std::to_string(startPixel) + " to " + std::to_string(endPixel));
-
-	cudaEventRecord(start);
-	gpuCovarianceComputation << <grid, block >> >(gpuData[device], gpuCovariance, currentQuadrandInfo.pixelNumber, currentQuadrandInfo.imageNumber, startPixel, nPixel, TIME_WINDOW, startTime, xOffset, yOffset);
-	cudaEventRecord(stop);
-
-	// RESULTS COPY
-
-	/// Copy the covariance from GPU to RAM.
-	err = cudaMemcpy(covariance_local[device], gpuCovariance, nPixel * currentQuadrandInfo.pixelNumber * nTime * sizeof(float), cudaMemcpyDeviceToHost);
-	if (err != 0)
-		log("GPU " + std::to_string(device) + " ERROR: covariance memory copy, code " + std::to_string(err) + ", " + cudaGetErrorString(err));
-
-	/// Free the GPU memory
-	cudaFree(gpuCovariance);
-
-	// EXECUTION TIME
-	cudaEventSynchronize(stop);
-	float milliseconds;
-	cudaEventElapsedTime(&milliseconds, start, stop);
-
-	int N = (block.x * block.y) * (grid.x * grid.y * grid.z);
-	updatePerformance(&gpuPerf[device], milliseconds, N, 2);
-
-}
-
-__global__ void gpuCovarianceComputation(int* data, float* covariance, int pixelNumber, int imageNumber, int pixelStart, int nPixel, int timeWindow, int timeStart, int xOffset, int yOffset){
-
-	/*
-		p: the ABSOLUTE number of pixel -p-.
-		q: the RELATIVE number of pixel -q-.
-		q + pixelStart: the ABSOLUTE number of pixel -q-.
-		blockIdx.z: starting time instant of the time window.
-	*/
-
-	long p = blockIdx.x * blockDim.x + threadIdx.x;
-	long q = blockIdx.y * blockDim.y + threadIdx.y;
-
-	/// Check if the pixels are right, the round up can put more threads than how much needed.
-	if (p < pixelNumber && q < nPixel && (q + pixelStart) < pixelNumber){
-
-		long product = 0;
-		long p_sum = 0;
-		long q_sum = 0;
-
-		/// Loop over all the data in a time window.
-		for (int t = 0; t < timeWindow; t++){
-
-			/// Compute the indexes for the data (in the data -p- and -q- indeces must be the ABSOLUTE number).
-			long p_index = (p + xOffset) * imageNumber + t + (blockIdx.z + timeStart);
-			long q_index = (q + pixelStart + yOffset) * imageNumber + t + (blockIdx.z + timeStart);
-
-			/// Compute the summations necessary for the covariance.
-			product += data[p_index] * data[q_index];
-			p_sum += data[p_index];
-			q_sum += data[q_index];
-
-		}
-
-		/// The -q- here need the relative index because the covariance has only space for the pixels on this GPU.
-		long covariance_index = (q * pixelNumber + p) + (blockIdx.z * nPixel * pixelNumber);
-		covariance[covariance_index] = ((float)product / timeWindow) - ((float)p_sum / timeWindow) * ((float)q_sum / timeWindow);
-
-	}
-
-}
-
 
  /*
 	3e. ### CORRELATION ###
@@ -630,7 +458,7 @@ __global__ void gpuCovarianceComputation(int* data, float* covariance, int pixel
 	- correlationComputation: function executed by the thread, allocate the GPU memory and launch the kernel.
 	- gpuCorrelationComputation: kernel function that compute the correlation.
 */
-float* splitCorrelationComputation(int startTime, int endTime, float* covariance, float* variance, int xOffset, int yOffset){
+float* splitCorrelationComputation(int startTime, int endTime, float* variance, int xOffset, int yOffset){
 
 	/// Allocate memory for the correlation.
 	float **correlation_local = (float**)malloc(gpuNumber * sizeof(float*));
@@ -646,7 +474,7 @@ float* splitCorrelationComputation(int startTime, int endTime, float* covariance
 		int endPixel = getEndingPixel(d, currentQuadrandInfo, gpuNumber);
 
 		// Thread creation and launch.
-		myThreads[d] = std::thread(correlationComputation, d, startPixel, endPixel, startTime, endTime, correlation_local, covariance, variance, xOffset, yOffset);
+		myThreads[d] = std::thread(correlationComputation, d, startPixel, endPixel, startTime, endTime, correlation_local, variance, xOffset, yOffset);
 
 	}
 
@@ -670,7 +498,7 @@ float* splitCorrelationComputation(int startTime, int endTime, float* covariance
 
 }
 
-void correlationComputation(int device, int startPixel, int endPixel, int startTime, int endTime, float** correlation_local, float* covariance, float* variance, int xOffset, int yOffset){
+void correlationComputation(int device, int startPixel, int endPixel, int startTime, int endTime, float** correlation_local, float* variance, int xOffset, int yOffset){
 
 	/// Compute the number of pixel to process.
 	int nPixel = endPixel - startPixel + 1;
@@ -699,21 +527,10 @@ void correlationComputation(int device, int startPixel, int endPixel, int startT
 
 	/// GPU memory pointers.
 	float* gpuVariance = 0;
-	float* gpuCovariance = 0;
 	float* gpuCorrelation = 0;
 	cudaError_t err;
 
 	// MEMORY ALLOCATION
-
-	/// Allocation of the COVARIANCE memory on GPU for device -d-.
-	err = cudaMalloc((void**)&gpuCovariance, currentQuadrandInfo.pixelNumber * currentQuadrandInfo.pixelNumber * nTime * sizeof(float));
-	if (err != 0)
-		log("GPU " + std::to_string(device) + " ERROR: covariance memory alocation, code " + std::to_string(err) + ", " + cudaGetErrorString(err));
-
-	/// Copy the covariance from RAM to GPU, the covariance must be copied ALL.
-	err = cudaMemcpy(gpuCovariance, covariance, currentQuadrandInfo.pixelNumber * currentQuadrandInfo.pixelNumber * nTime * sizeof(float), cudaMemcpyHostToDevice);
-	if (err != 0)
-		log("GPU " + std::to_string(device) + " ERROR: covariance memory copy, code " + std::to_string(err) + ", " + cudaGetErrorString(err));
 
 	/// Allocation of the VARIANCE memory on GPU for device -d-.
 	err = cudaMalloc((void**)&gpuVariance, imagesInfo.pixelNumber * nTime * sizeof(float));
@@ -748,18 +565,17 @@ void correlationComputation(int device, int startPixel, int endPixel, int startT
 	log("GPU " + std::to_string(device) + " Kernel call, correlation computation. From pixel " + std::to_string(startPixel) + " to " + std::to_string(endPixel));
 
 	cudaEventRecord(start);
-	gpuCorrelationComputation << <grid, block >> >(gpuCovariance, gpuVariance, gpuCorrelation, currentQuadrandInfo.pixelNumber, startPixel, nPixel, startTime, xOffset, yOffset);
+	gpuCorrelationComputation << <grid, block >> >(gpuData[device], gpuVariance, gpuCorrelation, currentQuadrandInfo.imageNumber, currentQuadrandInfo.pixelNumber, TIME_WINDOW, startPixel, nPixel, startTime, xOffset, yOffset);
 	cudaEventRecord(stop);
 
 	// RESULTS COPY
 
-	/// Copy the covariance from GPU to RAM.
+	/// Copy the correlation from GPU to RAM.
 	err = cudaMemcpy(correlation_local[device], gpuCorrelation, nPixel * currentQuadrandInfo.pixelNumber * nTime * sizeof(float), cudaMemcpyDeviceToHost);
 	if (err != 0)
 		log("GPU " + std::to_string(device) + " ERROR: correlation memory copy, code " + std::to_string(err) + ", " + cudaGetErrorString(err));
 
 	/// Free the GPU memory
-	cudaFree(gpuCovariance);
 	cudaFree(gpuCorrelation);
 
 	// EXECUTION TIME
@@ -772,28 +588,44 @@ void correlationComputation(int device, int startPixel, int endPixel, int startT
 
 }
 
-__global__ void gpuCorrelationComputation(float* covariance, float* variance, float* correlation, int pixelNumber, int pixelStart, int nPixel, int startTime, int xOffset, int yOffset){
+__global__ void gpuCorrelationComputation(int* data, float* variance, float* correlation, int imageNumber, int pixelNumber, int timeWindow, int pixelStart, int nPixel, int startTime, int xOffset, int yOffset){
 
 	/*
-		p index: the ABSOLUTE number of thread of the row.
-		q index: the ABSOLUTE number of thread of the column.
+		p index: the ABSOLUTE number of thread of the x.
+		q index: the RELATIVE number of thread of the y.
 	*/
 
 	long p = blockIdx.x * blockDim.x + threadIdx.x;
 	long q = blockIdx.y * blockDim.y + threadIdx.y;
 
 	/// Check if the pixels are right, the round up can put more threads than how much needed.
-	if (p < pixelNumber && q < nPixel && (q + pixelStart) < pixelNumber){
+	if (p < pixelNumber && q < nPixel && (q + pixelStart) < pixelNumber && (p < (q + pixelStart))){
 
-		/// Compute the ABSOLUTE indexes to access the variance and the covariance.
+		long product = 0;
+		long p_sum = 0;
+		long q_sum = 0;
+
+		/// Loop over all the data in a time window.
+		for (int t = 0; t < timeWindow; t++){
+
+			/// Compute the indexes for the data (in the data -p- and -q- indeces must be the ABSOLUTE number).
+			long p_index = (p + xOffset) * imageNumber + t + (blockIdx.z + startTime);
+			long q_index = (q + pixelStart + yOffset) * imageNumber + t + (blockIdx.z + startTime);
+
+			/// Compute the summations necessary for the covariance.
+			product += data[p_index] * data[q_index];
+			p_sum += data[p_index];
+			q_sum += data[q_index];
+
+		}
+
+		/// Compute the ABSOLUTE indexes to access the variance.
 		long p_variance_index = (p + xOffset) + (blockIdx.z * pixelNumber);
 		long q_variance_index = (q + pixelStart + yOffset) + (blockIdx.z * pixelNumber);
 
-		long covarince_index = ((q + pixelStart) * pixelNumber + p) + (blockIdx.z * pixelNumber * pixelNumber);
-
 		/// To access the correlation position I need the RELATIVE index of q.
 		long correlation_index = (q * pixelNumber + p) + (blockIdx.z * nPixel * pixelNumber);
-		correlation[correlation_index] = covariance[covarince_index] / (sqrt(variance[p_variance_index]) * sqrt(variance[q_variance_index]));
+		correlation[correlation_index] = ((float)product / timeWindow) - ((float)p_sum / timeWindow) * ((float)q_sum / timeWindow) / (sqrt(variance[p_variance_index]) * sqrt(variance[q_variance_index]));
 
 	}
 
@@ -983,18 +815,12 @@ void normalExecution(int startTime, int endTime, int threadNumber){
 	std::cout << "Compute variance\n";
 	float *variance_local = splitVarianceComputation(startTime, endTime);
 
-	// 3d. Compute the covariance matrix for the current split.
-
-	std::cout << "Compute covariance\n";
-	float *covariance_local = splitCovarianceComputation(startTime, endTime, 0, 0);
-
 	// 3e. Compute the correlation matrix of the current split.
 
 	std::cout << "Compute correlation\n";
-	float *correlation_local = splitCorrelationComputation(startTime, endTime, covariance_local, variance_local, 0, 0);
+	float *correlation_local = splitCorrelationComputation(startTime, endTime, variance_local, 0, 0);
 
 	/// Free the covariance, not used anymore.
-	free(covariance_local);
 	free(variance_local);
 
 
@@ -1018,8 +844,8 @@ void normalExecution(int startTime, int endTime, int threadNumber){
 	}
 
 	// 3g. Save the results on file.
-	saveThreads[threadNumber] = std::thread(saveResults, correlation_local, startTime, (endTime - startTime + 1), imagesInfo, TIME_WINDOW, cpuPerf);
-	//free(correlation_local);
+	//saveThreads[threadNumber] = std::thread(saveResults, correlation_local, startTime, (endTime - startTime + 1), imagesInfo, TIME_WINDOW, cpuPerf);
+	free(correlation_local);
 
 }
 
@@ -1072,22 +898,14 @@ void quadrantExecution(int startTime, int endTime, int threadNumber){
 
 			/// Continue the normal execution of the program for the current quadrant.
 
-			// 3d. Compute the covariance matrix for the current split.
-
-			std::cout << "Compute covariance\n";
-			float *covariance_local = splitCovarianceComputation(startTime, endTime, xOffset, yOffset);
-
 			// 3e. Compute the correlation matrix of the current split.
 
 			std::cout << "Compute correlation\n";
-			float *correlation_local = splitCorrelationComputation(startTime, endTime, covariance_local, variance_local, xOffset, yOffset);
-
-			/// Free the covariance, not used anymore.
-			free(covariance_local);
+			float *correlation_local = splitCorrelationComputation(startTime, endTime, variance_local, xOffset, yOffset);
 
 			// 3f. Save the results on file.
-			saveThreads[threadNumber] = std::thread(saveQuadrantResults, correlation_local, startTime, (endTime - startTime + 1), currentQuadrandInfo, TIME_WINDOW, cpuPerf, q, xOffset, yOffset, imagesInfo.pixelNumber);
-			//free(correlation_local);
+			//saveThreads[threadNumber] = std::thread(saveQuadrantResults, correlation_local, startTime, (endTime - startTime + 1), currentQuadrandInfo, TIME_WINDOW, cpuPerf, q, xOffset, yOffset, imagesInfo.pixelNumber);
+			free(correlation_local);
 
 		}
 	}
