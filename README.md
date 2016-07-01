@@ -9,9 +9,9 @@ In this project actually are implemented the following measures:
 
 #### Pearson Coefficient
 There are three different version of the program that computes the pearson correlation coeeficient.
-* **Integer Version**:  takes as input **Integer** values and the results is composed by a series of files (one per each time instant) that represent the similarity matrices. You can find it in the folder *'pearsonComputationInteger'*.
-* **Float Version**:  takes as input **Float** values and the results is composed by a series of files (one per each time instant) that represent the similarity matrices. You can find it in the folder *'pearsonComputationFloat'*.
-* **Counter Version**:  takes as input **Integer** values and the results is composed by the number pairs with the similarity in each interval from -1 to +1 with step 0.1. You can find it in the folder *'pearsonComputationCounter'*.
+* **Integer Version**:  takes as input **Integer** values and the results is composed by a series of files (one per each time instant) that represent the similarity matrices. You can find it in the folder *'pearsonComputationInteger'* ([Integer Version Folder](pearsonComputationInteger/)).
+* **Float Version**:  takes as input **Float** values and the results is composed by a series of files (one per each time instant) that represent the similarity matrices. You can find it in the folder *'pearsonComputationFloat'* ([Float Version Folder](pearsonComputationFloat/)).
+* **Counter Version**:  takes as input **Integer** values and the results is composed by the number pairs with the similarity in each interval from -1 to +1 with step 0.1. You can find it in the folder *'pearsonComputationCounter'* ([Counter Version Folder](pearsonComputationCounter/)).
 
 ------------------------------------
 ## Input Data Format
