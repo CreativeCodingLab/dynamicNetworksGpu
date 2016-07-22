@@ -35,10 +35,13 @@ int TIME_WINDOW;
 int gpuNumber;
 device* gpu;
 
-// ### NODES VARIABLED;
+// ### NODES VARIABLES.
 info nodeInfo;
 info currentQuadrandInfo;
 
+// ###PERFORMANCE.
+gpuPerformance *gpuPerf;
+cpuPerformance *cpuPerf;
 
 // ### DATA.
 int *data;
@@ -66,6 +69,14 @@ __global__ void gpuCorrelationComputation(float*, float*, float*, int, int, int,
 ------------------------------------*/
 int main(int argc, char *argv[]) {
 
+
+	/// ### Take initial time stamp.
+	std::time_t start, end;
+	start = std::time(nullptr);
+
+	// #0 INIT VARIABLES.
+	gpuPerf = new gpuPerformance[gpuNumber];
+	cpuPerf = new cpuPerformance;
 
 
 	// #1 GET INFO.
@@ -109,9 +120,17 @@ int main(int argc, char *argv[]) {
 
 	
 
+	/// ### Take time stamp before difference.
+	std::time_t start_diff, end_diff;
+	start_diff = std::time(nullptr);
+
 	// #5 COMPUTE (x - m) AND VARIANCE.
 	computeDifferences(&diff, &variance);
 	std::cout << "\n";
+
+	/// ### Take time stamp after difference.
+	end_diff = std::time(nullptr);
+	cpuPerf->secDifference = (end_diff - start_diff);
 
 
 
@@ -135,7 +154,8 @@ int main(int argc, char *argv[]) {
 
 				/// Compute the current quadrant.
 				int q = r * (quadrant / 2) + c;
-				std::cout << q << "\n";
+				std::cout << "Quadrant " << q << "\n";
+				
 				/// Copute the offset on the two dimension.
 				int xOffset = (nodeInfo.nodeNumber / (quadrant / 2)) * c;
 				int yOffset = (nodeInfo.nodeNumber / (quadrant / 2)) * r;
@@ -159,7 +179,13 @@ int main(int argc, char *argv[]) {
 	}
 
 
+	/// ### Take final time stamp.
+	end = std::time(nullptr);
+	cpuPerf->secExecutionTime = (end - start);
+
+
 	// #8 End and Closing operations.
+	savePerformance(gpuNumber, TIME_WINDOW, gpuPerf, cpuPerf, nodeInfo.nodeNumber);
 	closeLogFile();
 	system("pause");
 
@@ -416,8 +442,8 @@ void correlationComputation(int device, int nodeStart, int nodeEnd, float** corr
 	float milliseconds;
 	cudaEventElapsedTime(&milliseconds, start, stop);
 
-	///int N = (block.x * block.y) * (grid.x * grid.y * grid.z);
-	///updatePerformance(&gpuPerf[device], milliseconds, N, 3);
+	int N = (block.x * block.y) * (grid.x * grid.y * grid.z);
+	updatePerformance(&gpuPerf[device], milliseconds, N);
 
 }
 

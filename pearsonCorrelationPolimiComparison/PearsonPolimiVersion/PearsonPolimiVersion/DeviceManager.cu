@@ -34,25 +34,19 @@ struct device{
 
 // ### Struct used to store the GPU performance.
 struct gpuPerformance{
-	gpuPerformance() : millisecAvgVariance(0), millisecAvgCovariance(0), millisecAvgCorrelation(0), millisecTotVariance(0), millisecTotCovariance(0), millisecTotCorrelation(0){};
-	float millisecAvgVariance;
-	float millisecAvgCovariance;
+	gpuPerformance() : millisecAvgCorrelation(0), millisecCorrelation(0){};
 	float millisecAvgCorrelation;
-	float millisecTotVariance;
-	float millisecTotCovariance;
-	float millisecTotCorrelation;
-	float bwVariance;
-	float bwCovariance;
+	float millisecCorrelation;
 	float bwCorrelation;
 };
 
 // ### Struct used to store the CPU performance.
 struct cpuPerformance{
-	cpuPerformance() : exeTime(0), exeSaving(0), waitingTime(0){};
-	int exeTime;
-	int exeSaving;
-	int waitingTime;
+	cpuPerformance() : secDifference(0), secExecutionTime(0){};
+	float secDifference;
+	float secExecutionTime;
 };
+
 
 /*
 	### FUNCTION:
@@ -112,80 +106,42 @@ device* getDeviceProp() {
 
 /*
 	### Function:
-	Update the performance measure.
+	Update the performance data.
 */
-void updatePerformance(gpuPerformance* perf, float millisec, int N, int stuff){
+void updatePerformance(gpuPerformance* perf, float millisec, int N){
 
-	if (stuff == 1){
+	if (perf->millisecAvgCorrelation <= 0)
+		perf->millisecAvgCorrelation = millisec;
+	else
+		perf->millisecAvgCorrelation = (perf->millisecAvgCorrelation + millisec) / 2;
 
-		if (perf->millisecAvgVariance == 0)
-			perf->millisecAvgVariance = millisec;
-		else
-			perf->millisecAvgVariance = (perf->millisecAvgCovariance + millisec) / 2;
-
-		perf->millisecTotVariance = perf->millisecTotVariance + millisec;
-		perf->bwVariance = (N * sizeof(int)* 4 + N * sizeof(float)) / millisec / 1e6;
-
-	}
-
-	if (stuff == 2){
-
-		if (perf->millisecAvgCovariance == 0)
-			perf->millisecAvgCovariance = millisec;
-		else
-			perf->millisecAvgCovariance = (perf->millisecAvgCovariance + millisec) / 2;
-
-		perf->millisecTotCovariance = perf->millisecTotCovariance + millisec;
-		perf->bwCovariance = (N * sizeof(int)* 4 + N * sizeof(float)) / millisec / 1e6;
-
-	}
-
-	if (stuff == 3) {
-
-		if (perf->millisecAvgCorrelation == 0)
-			perf->millisecAvgCorrelation = millisec;
-		else
-			perf->millisecAvgCorrelation = (perf->millisecAvgCorrelation + millisec) / 2;
-
-		perf->millisecTotCorrelation = perf->millisecTotCorrelation + millisec;
-		perf->bwCorrelation = (N * sizeof(float)* 4) / millisec / 1e6;
-
-	}
+	perf->millisecCorrelation = perf->millisecCorrelation + millisec;
+	perf->bwCorrelation = (N * sizeof(float)* 4) / millisec / 1e6;
 
 }
 
 /*
 	### Function:
-	Save the performance.
+	Save performance data.
 */
-void savePerformance(int gpuNumber, int window, gpuPerformance* perf, cpuPerformance* cpuPerf, int pixels){
+void savePerformance(int gpuNumber, int window, gpuPerformance* perf, cpuPerformance* cpuPerf, int nodes){
 
 	std::string RES_FOLDER = "output/";
-	std::string fileName = "N_" + std::to_string(pixels) + "_W_" + std::to_string(window) + "_performance.txt";
+	std::string fileName = "N_" + std::to_string(nodes) + "_W_" + std::to_string(window) + "_performance.txt";
 
 	/// Open the performance file.
 	std::ofstream oFile(RES_FOLDER + fileName);
 
 	for (int i = 0; i < gpuNumber; i++){
 
-		oFile << "Device " + std::to_string(i) + " Avg Variance Time," + std::to_string(perf[i].millisecAvgVariance) << "\n";
-		oFile << "Device " + std::to_string(i) + " Tot Variance Time," + std::to_string(perf[i].millisecTotVariance) << "\n";
-
-		oFile << "Device " + std::to_string(i) + " Avg Covariance Time," + std::to_string(perf[i].millisecAvgCovariance) << "\n";
-		oFile << "Device " + std::to_string(i) + " Tot Covariance Time," + std::to_string(perf[i].millisecTotCovariance) << "\n";
-
 		oFile << "Device " + std::to_string(i) + " Avg Correlation Time," + std::to_string(perf[i].millisecAvgCorrelation) << "\n";
-		oFile << "Device " + std::to_string(i) + " Tot Correlation Time," + std::to_string(perf[i].millisecTotCorrelation) << "\n";
-
-		oFile << "Device " + std::to_string(i) + " BW Variance," + std::to_string(perf[i].bwVariance) << "\n";
-		oFile << "Device " + std::to_string(i) + " BW Covariance," + std::to_string(perf[i].bwCovariance) << "\n";
+		oFile << "Device " + std::to_string(i) + " Tot Correlation Time," + std::to_string(perf[i].millisecCorrelation) << "\n";
 		oFile << "Device " + std::to_string(i) + " BW Correlation," + std::to_string(perf[i].bwCorrelation) << "\n";
 
 	}
 
-	oFile << "CPU Tot Execution Time," + std::to_string((cpuPerf->exeTime) * 1000) << "\n";
-	oFile << "CPU Tot Saving Time," + std::to_string((cpuPerf->exeSaving) * 1000) << "\n";
-	oFile << "CPU Tot Waiting Time," + std::to_string((cpuPerf->waitingTime) * 1000) << "\n";
+	oFile << "CPU Differences Time," + std::to_string((cpuPerf->secDifference) * 1000) << "\n";
+	oFile << "CPU Execution Time," + std::to_string((cpuPerf->secExecutionTime) * 1000) << "\n";
 
 	/// Close the file.
 	oFile.close();
