@@ -25,7 +25,7 @@
 #include "Logger.cpp"
 
 /*	------------------------------------
-	VARIABLES.
+			VARIABLES.
 ------------------------------------*/
 
 // ### GENERIC VARIABLES.
@@ -74,7 +74,7 @@ int main(int argc, char *argv[]) {
 	///TIME_WINDOW = std::atoi(argv[1]);
 
 	/// Set files name.
-	setFilesName("info_A1_100.txt", "data_A1_100.txt");
+	setFilesName("info_A1_22360.txt", "data_A1_22360.txt");
 	///setFilesName(argv[2], argv[3]);
 
 	/// Init the log file (the argv[4] is the number of nodes).
@@ -120,21 +120,46 @@ int main(int argc, char *argv[]) {
 	gpuVariance = loadVarianceOnGpu();
 
 
+	
+	// #7 COMPUTE THE CORRELATION.
 	/// CHECK IF THE EXECUTION MUST BE DONE IN QUADRANT.
 	if (nodeInfo.nodeNumber > 12800) {
 
 		/// QUADRANT EXECUTION.
 
+		/// Quadrant number (multiple of 4).
+		int quadrant = 4;
+
+		for (int r = 0; r < (quadrant / 2); r++){
+			for (int c = 0; c < (quadrant / 2); c++){
+
+				/// Compute the current quadrant.
+				int q = r * (quadrant / 2) + c;
+				std::cout << q << "\n";
+				/// Copute the offset on the two dimension.
+				int xOffset = (nodeInfo.nodeNumber / (quadrant / 2)) * c;
+				int yOffset = (nodeInfo.nodeNumber / (quadrant / 2)) * r;
+
+				/// Set the current quadrant info.
+				currentQuadrandInfo.frameNumber = nodeInfo.frameNumber;
+				currentQuadrandInfo.nodeNumber = nodeInfo.nodeNumber / (quadrant / 2);
+
+				splitCorrelationComputation(xOffset, yOffset);
+
+			}
+		}
+
 	} else {
 
 		/// NON-QUADRANT EXECUTION.
 
+		currentQuadrandInfo = nodeInfo;
 		splitCorrelationComputation(0, 0);
 
 	}
 
 
-	// #N End and Closing operations.
+	// #8 End and Closing operations.
 	closeLogFile();
 	system("pause");
 
@@ -324,7 +349,7 @@ float* splitCorrelationComputation(int xOffset, int yOffset){
 void correlationComputation(int device, int nodeStart, int nodeEnd, float** correlation_local, int xOffset, int yOffset){
 
 	/// Compute the number of pixel to process.
-	int nNode = nodeStart - nodeEnd + 1;
+	int nNode = nodeEnd - nodeStart + 1;
 
 	/// Instantiete the RAM memory where save the results.
 	correlation_local[device] = (float*)malloc(nNode * currentQuadrandInfo.nodeNumber * sizeof(float));
@@ -369,7 +394,7 @@ void correlationComputation(int device, int nodeStart, int nodeEnd, float** corr
 
 	// KERNEL CALL
 
-	///log("GPU " + std::to_string(device) + " Grid size: " + std::to_string(grid.x) + " x " + std::to_string(grid.y) + " x " + std::to_string(grid.z) + " Block size: " + std::to_string(block.x) + " x " + std::to_string(block.y));
+	log("GPU " + std::to_string(device) + " Grid size: " + std::to_string(grid.x) + " x " + std::to_string(grid.y) + " x " + std::to_string(grid.z) + " Block size: " + std::to_string(block.x) + " x " + std::to_string(block.y));
 	log("GPU " + std::to_string(device) + " Kernel call, correlation computation. From pixel " + std::to_string(nodeStart) + " to " + std::to_string(nodeEnd));
 
 	cudaEventRecord(start);
@@ -414,13 +439,12 @@ __global__ void gpuCorrelationComputation(float* diff, float* variance, float* c
 		
 		for (int f = 0; f < TIME_WINDOW; f++){
 
-			sum_p += diff[f + p * TIME_WINDOW];
-			sum_p += diff[f + (q + nodeStart) * TIME_WINDOW];
+			sum_p += diff[f + (p + xOffset) * TIME_WINDOW];
+			sum_p += diff[f + (q + nodeStart + yOffset) * TIME_WINDOW];
 
 		}
 
-		correlation[p + q * nodeNumber] = (sum_p * sum_q) / (sqrt(variance[p]) * sqrt(variance[q + nodeStart]));
-		
+		correlation[p + q * nodeNumber] = (sum_p * sum_q) / (sqrt(variance[p + xOffset]) * sqrt(variance[q + nodeStart + yOffset]));
 
 	}
 
