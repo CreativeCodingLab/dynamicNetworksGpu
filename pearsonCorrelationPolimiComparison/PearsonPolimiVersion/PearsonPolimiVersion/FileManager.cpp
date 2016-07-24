@@ -151,6 +151,6 @@ int getStartingPixel(int device, info imagesInfo, int gpuNumber){
 }
 int getEndingPixel(int device, info imagesInfo, int gpuNumber){
 
-	return getStartingPixel(device, imagesInfo, gpuNumber) + std::floor((float)imagesInfo.nodeNumber / gpuNumber) - 1;
+	return getStartingPixel(device, imagesInfo, gpuNumber) + std::floor((float)imagesInfo.nodeNumber / gpuNumber);
 
 }

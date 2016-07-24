@@ -116,7 +116,7 @@ void updatePerformance(gpuPerformance* perf, float millisec, int N){
 		perf->millisecAvgCorrelation = (perf->millisecAvgCorrelation + millisec) / 2;
 
 	perf->millisecCorrelation = perf->millisecCorrelation + millisec;
-	perf->bwCorrelation = (N * sizeof(float)* 4) / millisec / 1e6;
+	perf->bwCorrelation = (perf->bwCorrelation + ((N * sizeof(float)* 4) / millisec / 1e6)) / 2;
 
 }
 

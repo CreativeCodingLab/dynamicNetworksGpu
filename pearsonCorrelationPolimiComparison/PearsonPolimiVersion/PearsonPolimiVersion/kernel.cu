@@ -85,6 +85,7 @@ int main(int argc, char *argv[]) {
 	///TIME_WINDOW = std::atoi(argv[1]);
 
 	/// Set files name.
+	///setFilesName("info_A1_100.txt", "data_A1_100.txt");
 	setFilesName("info_A1_22360.txt", "data_A1_22360.txt");
 	///setFilesName(argv[2], argv[3]);
 
@@ -105,6 +106,13 @@ int main(int argc, char *argv[]) {
 	gpu = getDeviceProp();
 	std::cout << "\n";
 
+
+	// #0 INIT VARIABLES
+	for (int i = 0; i < gpuNumber; i++){
+		gpuPerf[i].millisecAvgCorrelation = 0;
+		gpuPerf[i].millisecCorrelation = 0;
+		gpuPerf[i].bwCorrelation = 0;
+	}
 
 
 	// #3 GET DATA INFO.
@@ -187,7 +195,7 @@ int main(int argc, char *argv[]) {
 	// #8 End and Closing operations.
 	savePerformance(gpuNumber, TIME_WINDOW, gpuPerf, cpuPerf, nodeInfo.nodeNumber);
 	closeLogFile();
-	system("pause");
+	///system("pause");
 
 }
 
@@ -367,7 +375,6 @@ float* splitCorrelationComputation(int xOffset, int yOffset){
 	/// Delete the threads array.
 	delete[] myThreads;
 
-
 	return NULL;
 
 }
@@ -458,7 +465,7 @@ __global__ void gpuCorrelationComputation(float* diff, float* variance, float* c
 	long q = blockIdx.y * blockDim.y + threadIdx.y;
 
 	/// Check if the pixels are right, the round up can put more threads than how much needed.
-	if (p < nodeNumber && q < nNode && (q + nodeStart) < nodeNumber){
+	if (p < nodeNumber && q < nNode && (q + nodeStart) < nodeNumber && p < (q + nodeStart)){
 
 		float sum_p = 0;
 		float sum_q = 0;
