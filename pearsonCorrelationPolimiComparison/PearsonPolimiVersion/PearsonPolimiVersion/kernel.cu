@@ -91,8 +91,9 @@ int main(int argc, char *argv[]) {
 	///TIME_WINDOW = std::atoi(argv[1]);
 
 	/// Set files name.
-	setFilesName("info_A1_100.txt", "data_A1_100.txt");
+	///setFilesName("info_A1_100.txt", "data_A1_100.txt");
 	///setFilesName("info_A1_22360.txt", "data_A1_22360.txt");
+	setFilesName("info_frame_0.txt", "data_frame_0.txt");
 	///setFilesName(argv[2], argv[3]);
 
 	/// Init the log file (the argv[4] is the number of nodes).
@@ -118,6 +119,7 @@ int main(int argc, char *argv[]) {
 
 	// #0 INIT VARIABLES
 	for (int i = 0; i < gpuNumber; i++){
+		gpuPerf[i].millisecLoad = 0;
 		gpuPerf[i].millisecAvgCorrelation = 0;
 		gpuPerf[i].millisecCorrelation = 0;
 		gpuPerf[i].bwCorrelation = 0;
@@ -156,7 +158,6 @@ int main(int argc, char *argv[]) {
 		/// ### Take time stamp after difference.
 		end_diff = std::time(nullptr);
 		cpuPerf->secDifference = (end_diff - start_diff);
-
 
 
 		// #6 LOAD DIFF AND VARIANCE ON GPU.
@@ -240,7 +241,7 @@ int main(int argc, char *argv[]) {
 
 			// 3g. Save the results on file.
 			///saveThreads = std::thread(saveResults, correlation_local, t, nodeInfo, TIME_WINDOW);
-			free(correlation_local);
+			///free(correlation_local);
 
 		}
 
@@ -323,6 +324,11 @@ void computeDifferences(float **diff, float **variance, int timeOffset){
 
 		// #5c COMPUTE VARIANCE.
 		(*variance)[n] = sum_var / TIME_WINDOW;
+		
+		/// Add noise to avoid zero-problem.
+		if ((*variance)[n] == 0) {
+			(*variance)[n] = 0.0001;
+		}
 
 	}
 
@@ -363,10 +369,22 @@ float** loadDiffOnGpu(float *diff){
 
 		// MEMORY COPY
 
+		/// Variables used to measure the execution time.
+		cudaEvent_t start, stop;
+		cudaEventCreate(&start);
+		cudaEventCreate(&stop);
+
 		/// Copy the DATA from RAM to GPU.
+		cudaEventRecord(start);
 		err = cudaMemcpy(gpuPtr[d], diff, nodeInfo.nodeNumber * TIME_WINDOW * sizeof(float), cudaMemcpyHostToDevice);
 		if (err != 0)
 			log("CUDA ERROR: Differences memory copy, code " + std::to_string(err));
+		cudaEventRecord(stop);
+
+		cudaEventSynchronize(stop);
+		float milliseconds;
+		cudaEventElapsedTime(&milliseconds, start, stop);
+		gpuPerf[d].millisecLoad += milliseconds;
 
 	}
 
@@ -402,10 +420,22 @@ float** loadVarianceOnGpu(float* variance){
 
 		// MEMORY COPY
 
+		/// Variables used to measure the execution time.
+		cudaEvent_t start, stop;
+		cudaEventCreate(&start);
+		cudaEventCreate(&stop);
+
 		/// Copy the DATA from RAM to GPU.
+		cudaEventRecord(start);
 		err = cudaMemcpy(gpuPtr[d], variance, nodeInfo.nodeNumber * sizeof(float), cudaMemcpyHostToDevice);
 		if (err != 0)
 			log("CUDA ERROR: Variances memory copy, code " + std::to_string(err));
+		cudaEventRecord(stop);
+
+		cudaEventSynchronize(stop);
+		float milliseconds;
+		cudaEventElapsedTime(&milliseconds, start, stop);
+		gpuPerf[d].millisecLoad += milliseconds;
 
 	}
 
@@ -424,7 +454,7 @@ float** loadVarianceOnGpu(float* variance){
 */
 float* splitCorrelationComputation(int xOffset, int yOffset){
 
-	log("Variance computation \n");
+	log("Correlation computation \n");
 
 	/// Allocate memory for the correlation.
 	float **correlation_local = (float**)malloc(gpuNumber * sizeof(float*));
@@ -567,7 +597,7 @@ __global__ void gpuCorrelationComputation(float* diff_low, float* diff_high, flo
 
 			correlation[p + q * nodeNumber] = (sum_p * sum_q) / (sqrt(variance_low[p + xOffset]) * sqrt(variance_low[q + nodeStart + yOffset]));
 
-		} /*else {
+		} /* else {
 		
 			/// TIME INSTANT (T + 1)
 
@@ -583,8 +613,7 @@ __global__ void gpuCorrelationComputation(float* diff_low, float* diff_high, flo
 
 			correlation[p + q * nodeNumber] = (sum_p * sum_q) / (sqrt(variance_high[p + xOffset]) * sqrt(variance_high[q + nodeStart + yOffset]));
 		
-		}*/
-		
+		} */	
 
 	}
 

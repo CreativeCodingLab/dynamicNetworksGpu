@@ -181,7 +181,7 @@ void saveResults(float *saveData, int time, info nodeInfo, int TIME_WINDOW) {
 	std::string str_high = "";
 	for (int r = 0; r < nodeInfo.nodeNumber; r++){
 
-		for (int c = r; c < nodeInfo.nodeNumber; c++){
+		for (int c = 0; c < nodeInfo.nodeNumber; c++){
 
 			int result_index = (r * nodeInfo.nodeNumber + c);
 
@@ -204,7 +204,7 @@ void saveResults(float *saveData, int time, info nodeInfo, int TIME_WINDOW) {
 	oFileLow << str_low;
 	oFileLow.close();
 
-	oFileLow << str_high;
+	oFileHigh << str_high;
 	oFileHigh.close();
 
 	log("SAVING THREAD, end saving file " + fileName_low + " and " + fileName_high);
@@ -263,7 +263,7 @@ void saveQuadrantResults(float *saveData, int time, info quadrantInfo, int TIME_
 	oFileLow << str_low;
 	oFileLow.close();
 
-	oFileLow << str_high;
+	oFileHigh << str_high;
 	oFileHigh.close();
 
 	log("SAVING THREAD, end saving file " + fileName_low + " and " + fileName_high);

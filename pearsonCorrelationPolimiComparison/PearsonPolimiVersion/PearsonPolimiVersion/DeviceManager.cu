@@ -34,7 +34,8 @@ struct device{
 
 // ### Struct used to store the GPU performance.
 struct gpuPerformance{
-	gpuPerformance() : millisecAvgCorrelation(0), millisecCorrelation(0){};
+	gpuPerformance() : millisecLoad(0), millisecAvgCorrelation(0), millisecCorrelation(0){};
+	float millisecLoad;
 	float millisecAvgCorrelation;
 	float millisecCorrelation;
 	float bwCorrelation;
@@ -135,6 +136,7 @@ void savePerformance(int gpuNumber, int window, gpuPerformance* perf, cpuPerform
 
 	for (int i = 0; i < gpuNumber; i++){
 
+		oFile << "Device " + std::to_string(i) + " Tot Load Time," + std::to_string(perf[i].millisecLoad) << "\n";
 		oFile << "Device " + std::to_string(i) + " Avg Correlation Time," + std::to_string(perf[i].millisecAvgCorrelation) << "\n";
 		oFile << "Device " + std::to_string(i) + " Tot Correlation Time," + std::to_string(perf[i].millisecCorrelation) << "\n";
 		oFile << "Device " + std::to_string(i) + " BW Correlation," + std::to_string(perf[i].bwCorrelation) << "\n";
