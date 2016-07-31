@@ -45,23 +45,29 @@ cpuPerformance *cpuPerf;
 
 // ### DATA.
 int *data;
-float *diff;
-float *variance;
+float *diff_low;
+float *diff_high;
+float *variance_low;
+float *variance_high;
 
 // ### GPU POINTERS.
-float **gpuDiff;
-float **gpuVariance;
+float **gpuDiff_low;
+float **gpuDiff_high;
+float **gpuVariance_low;
+float **gpuVariance_high;
 
 /*	------------------------------------
 			FUNCTIONS.
 ------------------------------------*/
-void computeDifferences(float**, float**);
-float** loadDiffOnGpu();
-float** loadVarianceOnGpu();
+void computeDifferences(float**, float**, int);
+float** loadDiffOnGpu(float*);
+float** loadVarianceOnGpu(float*);
 
 float* splitCorrelationComputation(int, int);
 void correlationComputation(int, int, int, float**, int, int);
-__global__ void gpuCorrelationComputation(float*, float*, float*, int, int, int, int, int, int, int);
+__global__ void gpuCorrelationComputation(float*, float*, float*, float*, float*, int, int, int, int, int, int, int);
+
+float* mergeMemory(float**, info);
 
 
 /*	------------------------------------
@@ -85,13 +91,16 @@ int main(int argc, char *argv[]) {
 	///TIME_WINDOW = std::atoi(argv[1]);
 
 	/// Set files name.
-	///setFilesName("info_A1_100.txt", "data_A1_100.txt");
-	setFilesName("info_A1_22360.txt", "data_A1_22360.txt");
+	setFilesName("info_A1_100.txt", "data_A1_100.txt");
+	///setFilesName("info_A1_22360.txt", "data_A1_22360.txt");
 	///setFilesName(argv[2], argv[3]);
 
 	/// Init the log file (the argv[4] is the number of nodes).
 	initLogFile("TEST", TIME_WINDOW);
 	///initLogFile(argv[4], TIME_WINDOW);
+
+	/// Set if one frame or full dataset.
+	bool full = false;
 
 	log("Time window: " + std::to_string(TIME_WINDOW));
 
@@ -125,67 +134,138 @@ int main(int argc, char *argv[]) {
 	// #4 GET DATA.
 	data = getData(nodeInfo);
 	std::cout << "\n";
-
 	
+	/// Instantite the thread used to save the results.
+	std::thread saveThreads;
 
-	/// ### Take time stamp before difference.
-	std::time_t start_diff, end_diff;
-	start_diff = std::time(nullptr);
+	/// Loop over each frame.
+	for (int t = 0; t < ((nodeInfo.frameNumber - TIME_WINDOW) / 2); t++){
+		
+		std::cout << "\n";
+		log("Time instan ==> " + std::to_string(2 * t) + " and " + std::to_string(2 * t + 1));
 
-	// #5 COMPUTE (x - m) AND VARIANCE.
-	computeDifferences(&diff, &variance);
-	std::cout << "\n";
+		/// ### Take time stamp before difference.
+		std::time_t start_diff, end_diff;
+		start_diff = std::time(nullptr);
 
-	/// ### Take time stamp after difference.
-	end_diff = std::time(nullptr);
-	cpuPerf->secDifference = (end_diff - start_diff);
+		// #5 COMPUTE (x - m) AND VARIANCE.
+		computeDifferences(&diff_low, &variance_low, (2 * t));
+		computeDifferences(&diff_high, &variance_high, (2 * t + 1));
+		std::cout << "\n";
+
+		/// ### Take time stamp after difference.
+		end_diff = std::time(nullptr);
+		cpuPerf->secDifference = (end_diff - start_diff);
 
 
 
-	// #6 LOAD DIFF AND VARIANCE ON GPU.
-	gpuDiff = loadDiffOnGpu();
-	gpuVariance = loadVarianceOnGpu();
+		// #6 LOAD DIFF AND VARIANCE ON GPU.
+		gpuDiff_low = loadDiffOnGpu(diff_low);
+		gpuDiff_high = loadDiffOnGpu(diff_high);
+		gpuVariance_low = loadVarianceOnGpu(variance_low);
+		gpuVariance_high = loadVarianceOnGpu(variance_high);
 
 
-	
-	// #7 COMPUTE THE CORRELATION.
-	/// CHECK IF THE EXECUTION MUST BE DONE IN QUADRANT.
-	if (nodeInfo.nodeNumber > 12800) {
+		/// Check if the thread is active, could be joined.
+		if (saveThreads.joinable()){
 
-		/// QUADRANT EXECUTION.
+			std::time_t startWaiting, endWaiting;
+			startWaiting = std::time(nullptr);
 
-		/// Quadrant number (multiple of 4).
-		int quadrant = 4;
+			/// If yes, join the thtread, so wait the end of the results saving.
 
-		for (int r = 0; r < (quadrant / 2); r++){
-			for (int c = 0; c < (quadrant / 2); c++){
+			log("Waiting thread to compute");
+			saveThreads.join();
 
-				/// Compute the current quadrant.
-				int q = r * (quadrant / 2) + c;
-				std::cout << "Quadrant " << q << "\n";
-				
-				/// Copute the offset on the two dimension.
-				int xOffset = (nodeInfo.nodeNumber / (quadrant / 2)) * c;
-				int yOffset = (nodeInfo.nodeNumber / (quadrant / 2)) * r;
+			endWaiting = std::time(nullptr);
+			cpuPerf->secWaitingTime += (endWaiting - startWaiting);
 
-				/// Set the current quadrant info.
-				currentQuadrandInfo.frameNumber = nodeInfo.frameNumber;
-				currentQuadrandInfo.nodeNumber = nodeInfo.nodeNumber / (quadrant / 2);
-
-				splitCorrelationComputation(xOffset, yOffset);
-
-			}
 		}
 
-	} else {
+		// #7 COMPUTE THE CORRELATION.
+		/// CHECK IF THE EXECUTION MUST BE DONE IN QUADRANT.
+		if (nodeInfo.nodeNumber > 12800) {
 
-		/// NON-QUADRANT EXECUTION.
+			/// QUADRANT EXECUTION.
 
-		currentQuadrandInfo = nodeInfo;
-		splitCorrelationComputation(0, 0);
+			/// Quadrant number (multiple of 4).
+			int quadrant = 4;
+
+			for (int r = 0; r < (quadrant / 2); r++){
+				for (int c = 0; c < (quadrant / 2); c++){
+
+					/// Check if the thread is active, could be joined.
+					if (saveThreads.joinable()){
+
+						std::time_t startWaiting, endWaiting;
+						startWaiting = std::time(nullptr);
+
+						/// If yes, join the thtread, so wait the end of the results saving.
+
+						log("Waiting thread to compute");
+						saveThreads.join();
+
+						endWaiting = std::time(nullptr);
+						cpuPerf->secWaitingTime += (endWaiting - startWaiting);
+
+					}
+
+					/// Compute the current quadrant.
+					int q = r * (quadrant / 2) + c;
+					std::cout << "Quadrant " << q << "\n";
+
+					/// Copute the offset on the two dimension.
+					int xOffset = (nodeInfo.nodeNumber / (quadrant / 2)) * c;
+					int yOffset = (nodeInfo.nodeNumber / (quadrant / 2)) * r;
+
+					/// Set the current quadrant info.
+					currentQuadrandInfo.frameNumber = nodeInfo.frameNumber;
+					currentQuadrandInfo.nodeNumber = nodeInfo.nodeNumber / (quadrant / 2);
+
+					float* correlation_local = splitCorrelationComputation(xOffset, yOffset);
+
+					// 3f. Save the results on file.
+					///saveThreads = std::thread(saveQuadrantResults, correlation_local, t, currentQuadrandInfo, TIME_WINDOW, xOffset, yOffset, nodeInfo.nodeNumber);
+					free(correlation_local);
+
+				}
+			}
+
+		} else {
+
+			/// NON-QUADRANT EXECUTION.
+
+			currentQuadrandInfo = nodeInfo;
+			float* correlation_local = splitCorrelationComputation(0, 0);
+
+			// 3g. Save the results on file.
+			///saveThreads = std::thread(saveResults, correlation_local, t, nodeInfo, TIME_WINDOW);
+			free(correlation_local);
+
+		}
+
+		/// Check if full dataset or single frame.
+		if (!full){
+			break;
+		}
+
+	}	
+
+	/// Check if the thread is active, could be joined.
+	if (saveThreads.joinable()){
+
+		std::time_t startWaiting, endWaiting;
+		startWaiting = std::time(nullptr);
+
+		/// If yes, join the thtread, so wait the end of the results saving.
+
+		log("Waiting thread to compute");
+		saveThreads.join();
+
+		endWaiting = std::time(nullptr);
+		cpuPerf->secWaitingTime += (endWaiting - startWaiting);
 
 	}
-
 
 	/// ### Take final time stamp.
 	end = std::time(nullptr);
@@ -195,7 +275,7 @@ int main(int argc, char *argv[]) {
 	// #8 End and Closing operations.
 	savePerformance(gpuNumber, TIME_WINDOW, gpuPerf, cpuPerf, nodeInfo.nodeNumber);
 	closeLogFile();
-	///system("pause");
+	system("pause");
 
 }
 
@@ -211,7 +291,7 @@ int main(int argc, char *argv[]) {
 	Warning: it coputes the differences only for the frame in the TIME WINDOW.
 
 */
-void computeDifferences(float **diff, float **variance){
+void computeDifferences(float **diff, float **variance, int timeOffset){
 
 	std::cout << "Computing differences and variances\n";
 
@@ -227,7 +307,7 @@ void computeDifferences(float **diff, float **variance){
 
 		for (int f = 0; f < TIME_WINDOW; f++){
 			/// For that iterate over the frames in the TIME WINDOW.
-			sum_avg += data[n * TIME_WINDOW + f];
+			sum_avg += data[n * TIME_WINDOW + (f + timeOffset)];
 		}
 
 		avg = (float)sum_avg / (float)TIME_WINDOW;
@@ -237,7 +317,7 @@ void computeDifferences(float **diff, float **variance){
 
 		for (int f = 0; f < TIME_WINDOW; f++){
 			/// For that iterate over the frames in the TIME WINDOW.
-			(*diff)[n * TIME_WINDOW + f] = ((float)data[n * TIME_WINDOW + f] - avg);
+			(*diff)[n * TIME_WINDOW + f] = ((float)data[n * TIME_WINDOW + (f + timeOffset)] - avg);
 			sum_var += pow((*diff)[n * TIME_WINDOW + f], 2.0f);
 		}
 
@@ -256,7 +336,7 @@ void computeDifferences(float **diff, float **variance){
 	Functions that load the differences and the variances computed previously on evenry GPU device.
 
 */
-float** loadDiffOnGpu(){
+float** loadDiffOnGpu(float *diff){
 
 	/// GPU pointers array.
 	float** gpuPtr = (float**)malloc(gpuNumber * sizeof(float*));
@@ -295,7 +375,7 @@ float** loadDiffOnGpu(){
 
 }
 
-float** loadVarianceOnGpu(){
+float** loadVarianceOnGpu(float* variance){
 
 	/// GPU pointers array.
 	float** gpuPtr = (float**)malloc(gpuNumber * sizeof(float*));
@@ -375,7 +455,11 @@ float* splitCorrelationComputation(int xOffset, int yOffset){
 	/// Delete the threads array.
 	delete[] myThreads;
 
-	return NULL;
+	if (gpuNumber == 1) {
+		return correlation_local[0];
+	} else {
+		return mergeMemory(correlation_local, currentQuadrandInfo);
+	}	
 
 }
 
@@ -431,7 +515,7 @@ void correlationComputation(int device, int nodeStart, int nodeEnd, float** corr
 	log("GPU " + std::to_string(device) + " Kernel call, correlation computation. From pixel " + std::to_string(nodeStart) + " to " + std::to_string(nodeEnd));
 
 	cudaEventRecord(start);
-	gpuCorrelationComputation << <grid, block >> >(gpuDiff[device], gpuVariance[device], gpuCorrelation, xOffset, yOffset, currentQuadrandInfo.nodeNumber, nNode, nodeStart, nodeEnd, TIME_WINDOW);
+	gpuCorrelationComputation << <grid, block >> >(gpuDiff_low[device], gpuDiff_low[device], gpuVariance_low[device], gpuVariance_high[device], gpuCorrelation, xOffset, yOffset, currentQuadrandInfo.nodeNumber, nNode, nodeStart, nodeEnd, TIME_WINDOW);
 	cudaEventRecord(stop);
 
 	// RESULTS COPY
@@ -454,7 +538,7 @@ void correlationComputation(int device, int nodeStart, int nodeEnd, float** corr
 
 }
 
-__global__ void gpuCorrelationComputation(float* diff, float* variance, float* correlation, int xOffset, int yOffset, int nodeNumber, int nNode, int nodeStart, int nodeEnd, int TIME_WINDOW){
+__global__ void gpuCorrelationComputation(float* diff_low, float* diff_high, float* variance_low, float* variance_high, float* correlation, int xOffset, int yOffset, int nodeNumber, int nNode, int nodeStart, int nodeEnd, int TIME_WINDOW){
 
 	/*
 		p index: the ABSOLUTE number of thread of the x.
@@ -465,20 +549,75 @@ __global__ void gpuCorrelationComputation(float* diff, float* variance, float* c
 	long q = blockIdx.y * blockDim.y + threadIdx.y;
 
 	/// Check if the pixels are right, the round up can put more threads than how much needed.
-	if (p < nodeNumber && q < nNode && (q + nodeStart) < nodeNumber && p < (q + nodeStart)){
+	if (p < nodeNumber && q < nNode && (q + nodeStart) < nodeNumber){
 
-		float sum_p = 0;
-		float sum_q = 0;
+		if ((p + xOffset) < (q + nodeStart + yOffset)) {
+
+			/// TIME INSTANT T
+
+			float sum_p = 0;
+			float sum_q = 0;
+
+			for (int f = 0; f < TIME_WINDOW; f++){
+
+				sum_p += diff_low[f + (p + xOffset) * TIME_WINDOW];
+				sum_q += diff_low[f + (q + nodeStart + yOffset) * TIME_WINDOW];
+
+			}
+
+			correlation[p + q * nodeNumber] = (sum_p * sum_q) / (sqrt(variance_low[p + xOffset]) * sqrt(variance_low[q + nodeStart + yOffset]));
+
+		} /*else {
 		
-		for (int f = 0; f < TIME_WINDOW; f++){
+			/// TIME INSTANT (T + 1)
 
-			sum_p += diff[f + (p + xOffset) * TIME_WINDOW];
-			sum_p += diff[f + (q + nodeStart + yOffset) * TIME_WINDOW];
+			float sum_p = 0;
+			float sum_q = 0;
 
-		}
+			for (int f = 0; f < TIME_WINDOW; f++){
 
-		correlation[p + q * nodeNumber] = (sum_p * sum_q) / (sqrt(variance[p + xOffset]) * sqrt(variance[q + nodeStart + yOffset]));
+				sum_p += diff_high[f + (p + xOffset) * TIME_WINDOW];
+				sum_q += diff_high[f + (q + nodeStart + yOffset) * TIME_WINDOW];
+
+			}
+
+			correlation[p + q * nodeNumber] = (sum_p * sum_q) / (sqrt(variance_high[p + xOffset]) * sqrt(variance_high[q + nodeStart + yOffset]));
+		
+		}*/
+		
 
 	}
+
+}
+
+
+/*
+	### Function:
+	merge the arrays given.
+*/
+
+float* mergeMemory(float** local, info node){
+
+	/// Allocate full memory.
+	float *full = (float*)malloc(node.nodeNumber * node.nodeNumber * sizeof(float));
+
+	/// Iterate on the GPUs
+	for (int d = 0; d < gpuNumber; d++){
+
+		/// Compute the start and end pixel number.
+		int startPixel = getStartingPixel(d, currentQuadrandInfo, gpuNumber);
+		int endPixel = getEndingPixel(d, currentQuadrandInfo, gpuNumber);
+		int nPixel = endPixel - startPixel + 1;
+
+		/// Copy the memory.
+		memcpy(&full[(startPixel * node.nodeNumber)], &local[d][0], nPixel * node.nodeNumber * sizeof(float));
+
+		/// Free the memory pointed.
+		free(local[d]);
+
+	}
+
+	free(local);
+	return full;
 
 }

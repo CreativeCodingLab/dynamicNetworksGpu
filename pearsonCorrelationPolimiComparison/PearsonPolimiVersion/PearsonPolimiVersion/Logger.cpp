@@ -19,7 +19,7 @@
 #include <sstream>
 
 /*
-Log variables.
+	Log variables.
 */
 std::string LOG_NAME;
 std::string LOG_FOLDER = "logs/";
@@ -27,7 +27,7 @@ std::string LOG_FOLDER = "logs/";
 std::ofstream outfile;
 
 /*
-Function that create the filename of the log file.
+	Function that create the filename of the log file.
 */
 void initLogFile(char* n, int w){
 
@@ -55,7 +55,7 @@ void initLogFile(char* n, int w){
 }
 
 /*
-Function that close the log file.
+	Function that close the log file.
 */
 void closeLogFile(){
 
@@ -78,7 +78,7 @@ void closeLogFile(){
 }
 
 /*
-Function that log on the file the str given.
+	Function that log on the file the str given.
 */
 void log(std::string str){
 

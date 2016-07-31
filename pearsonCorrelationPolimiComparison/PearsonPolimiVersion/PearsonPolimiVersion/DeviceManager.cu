@@ -42,9 +42,10 @@ struct gpuPerformance{
 
 // ### Struct used to store the CPU performance.
 struct cpuPerformance{
-	cpuPerformance() : secDifference(0), secExecutionTime(0){};
+	cpuPerformance() : secDifference(0), secExecutionTime(0), secWaitingTime(0){};
 	float secDifference;
 	float secExecutionTime;
+	float secWaitingTime;
 };
 
 

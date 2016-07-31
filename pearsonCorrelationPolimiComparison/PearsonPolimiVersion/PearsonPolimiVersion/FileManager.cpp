@@ -154,3 +154,121 @@ int getEndingPixel(int device, info imagesInfo, int gpuNumber){
 	return getStartingPixel(device, imagesInfo, gpuNumber) + std::floor((float)imagesInfo.nodeNumber / gpuNumber);
 
 }
+
+/*
+	### Function:
+	save all the data into a txt file.
+
+	This function will be launched by a thread that will save the file indipendently.
+*/
+void saveResults(float *saveData, int time, info nodeInfo, int TIME_WINDOW) {
+
+	/// Name of the file to save.
+	std::string fileName_low;
+	std::string fileName_high;
+
+	/// Create the file name.
+	fileName_low = "N_" + std::to_string(nodeInfo.nodeNumber) + "_W_" + std::to_string(TIME_WINDOW) + "_T_" + std::to_string(time) + "_correlation.txt";
+	fileName_high = "N_" + std::to_string(nodeInfo.nodeNumber) + "_W_" + std::to_string(TIME_WINDOW) + "_T_" + std::to_string(time + 1) + "_correlation.txt";
+	log("SAVING THREAD, start saving file " + fileName_low + " and " + fileName_high);
+
+	/// Open the file.
+	std::ofstream oFileLow(RES_FOLDER + fileName_low);
+	std::ofstream oFileHigh(RES_FOLDER + fileName_high);
+
+	/// Write the results.
+	std::string str_low = "";
+	std::string str_high = "";
+	for (int r = 0; r < nodeInfo.nodeNumber; r++){
+
+		for (int c = r; c < nodeInfo.nodeNumber; c++){
+
+			int result_index = (r * nodeInfo.nodeNumber + c);
+
+			if (r < c) {
+
+				/// TIME T
+				str_low.append(std::to_string(r) + "," + std::to_string(c) + "," + std::to_string(saveData[result_index]) + "\n");
+
+			} else if (r > c) {
+
+				/// TIME (T + 1)
+				str_high.append(std::to_string(r) + "," + std::to_string(c) + "," + std::to_string(saveData[result_index]) + "\n");
+
+			}			
+
+		}
+
+	}
+
+	oFileLow << str_low;
+	oFileLow.close();
+
+	oFileLow << str_high;
+	oFileHigh.close();
+
+	log("SAVING THREAD, end saving file " + fileName_low + " and " + fileName_high);
+
+	/// Free the memory with the results.
+	free(saveData);
+
+}
+
+/*
+	### Function:
+	save the results that are split in different quadrant in a txt file.
+	- The function merege alone the results of each quadrant.
+
+	This function is launched as indipendent thread.
+*/
+void saveQuadrantResults(float *saveData, int time, info quadrantInfo, int TIME_WINDOW, int xOffset, int yOffset, int N){
+
+	/// Name of the file to save.
+	std::string fileName_low;
+	std::string fileName_high;
+
+	/// Create the file name.
+	fileName_low = "N_" + std::to_string(N) + "_W_" + std::to_string(TIME_WINDOW) + "_T_" + std::to_string(time) + "_correlation.txt";
+	fileName_high = "N_" + std::to_string(N) + "_W_" + std::to_string(TIME_WINDOW) + "_T_" + std::to_string(time + 1) + "_correlation.txt";
+	log("SAVING THREAD, start saving file " + fileName_low + " and " + fileName_high);
+
+	/// Open the file.
+	std::ofstream oFileLow(RES_FOLDER + fileName_low, std::ios_base::app);
+	std::ofstream oFileHigh(RES_FOLDER + fileName_high, std::ios_base::app);
+
+	/// Write the results.
+	std::string str_low = "";
+	std::string str_high = "";
+	for (int r = 0; r < quadrantInfo.nodeNumber; r++){
+
+		for (int c = 0; c < quadrantInfo.nodeNumber; c++){
+
+			int result_index = (r * quadrantInfo.nodeNumber + c);
+
+			if ((r + yOffset) < (c + xOffset)) {
+
+				/// TIME T
+				str_low.append(std::to_string(r) + "," + std::to_string(c) + "," + std::to_string(saveData[result_index]) + "\n");
+
+			} else if ((r + yOffset) > (c + xOffset)) {
+
+				/// TIME (T + 1)
+				str_high.append(std::to_string(r) + "," + std::to_string(c) + "," + std::to_string(saveData[result_index]) + "\n");
+
+			}
+
+		}
+	}
+
+	oFileLow << str_low;
+	oFileLow.close();
+
+	oFileLow << str_high;
+	oFileHigh.close();
+
+	log("SAVING THREAD, end saving file " + fileName_low + " and " + fileName_high);
+
+	/// Free the memory with the results.
+	free(saveData);
+
+}
