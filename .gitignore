@@ -43,3 +43,10 @@ imageProcessing/GIF_resting_state/
 imageProcessing/GIF_verb_generation/
 imageProcessing/GIF_resting_state_results/
 imageProcessing/data_extracted/
+pearsonFull/Full/Full/data/
+pearsonFull/Full/Full/x64/Debug/
+pearsonFull/Full/Full/Full.vcxproj
+pearsonFull/Full/Full.sln
+pearsonFull/Full/Full.sdf
+pearsonFull/Full/Full/logs/
+pearsonFull/Full/Full/output/
