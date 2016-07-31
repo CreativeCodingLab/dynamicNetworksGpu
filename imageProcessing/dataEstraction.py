@@ -25,6 +25,8 @@ bottom_right = [164, 109]
 
 for f in range(0, (N_FRAME +1)):
     
+    print f    
+    
     output_info_file_name = 'info_frame_' + str(f) + '.txt'
     output_values_file_name = 'data_frame_' + str(f) + '.txt'
     
