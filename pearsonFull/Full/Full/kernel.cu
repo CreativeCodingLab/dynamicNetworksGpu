@@ -91,8 +91,9 @@ int main(int argc, char *argv[]) {
 	///TIME_WINDOW = std::atoi(argv[1]);
 
 	/// Set files name.
-	setFilesName("info_A1_100.txt", "data_A1_100.txt");
+	///setFilesName("info_A1_100.txt", "data_A1_100.txt");
 	///setFilesName("info_A1_22360.txt", "data_A1_22360.txt");
+	setFilesName("info_frame_0.txt", "data_frame_0.txt");
 	///setFilesName(argv[2], argv[3]);
 
 	/// Init the log file (the argv[4] is the number of nodes).
@@ -645,8 +646,11 @@ void correlationComputation(int device, int startPixel, int endPixel, int time, 
 	/// Compute the grid dimension.
 	dim3 grid, block;
 
-	block.x = sqrt(gpu[device].maxThreadPerBlock);
-	block.y = sqrt(gpu[device].maxThreadPerBlock);
+	///block.x = sqrt(gpu[device].maxThreadPerBlock);
+	///block.y = sqrt(gpu[device].maxThreadPerBlock);
+
+	block.x = 8;
+	block.y = 8;
 
 	grid.x = std::ceil((float)currentQuadrandInfo.pixelNumber / block.x);
 	grid.y = std::ceil((float)nPixel / block.y); /// The split is on the y-axis
@@ -691,14 +695,15 @@ __global__ void gpuCorrelationComputation(int* data, float* variance, float* cor
 	long p = blockIdx.x * blockDim.x + threadIdx.x;
 	long q = blockIdx.y * blockDim.y + threadIdx.y;
 
+
 	/// Check if the pixels are right, the round up can put more threads than how much needed.
 	if (p < pixelNumber && q < nPixel && (q + pixelStart) < pixelNumber){
 
 		/// Compute the current time.
-		int currentTime;
+		int currentTime = 0;
 		if ((p + xOffset) < (q + pixelStart + yOffset)) {
 			currentTime = time;
-		} else if ((p + xOffset) > (q + pixelStart + yOffset)) {
+		} else {
 			currentTime = (time + 1);
 		}
 
@@ -706,12 +711,16 @@ __global__ void gpuCorrelationComputation(int* data, float* variance, float* cor
 		long p_sum = 0;
 		long q_sum = 0;
 
+		long p_index = 0;
+		long q_index = 0;
+
 		/// Loop over all the data in a time window.
 		for (int t = 0; t < timeWindow; t++){
 
 			/// Compute the indexes for the data (in the data -p- and -q- indeces must be the ABSOLUTE number).
-			long p_index = (p + xOffset) * imageNumber + (currentTime + time);
-			long q_index = (q + pixelStart + yOffset) * imageNumber + (currentTime + time);
+			p_index = (p + xOffset) * imageNumber + (currentTime + t);
+			q_index = (q + pixelStart + yOffset) * imageNumber + (currentTime + t);
+			
 
 			/// Compute the summations necessary for the covariance.
 			product += data[p_index] * data[q_index];
@@ -719,7 +728,7 @@ __global__ void gpuCorrelationComputation(int* data, float* variance, float* cor
 			q_sum += data[q_index];
 
 		}
-
+		
 		/// Compute the ABSOLUTE indexes to access the variance.
 		long p_variance_index = (p + xOffset) + (currentTime * pixelNumber);
 		long q_variance_index = (q + pixelStart + yOffset) + (currentTime * pixelNumber);
